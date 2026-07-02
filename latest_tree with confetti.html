@@ -1,0 +1,1726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>hugetree — mountain gym tracker</title>
+
+<style>
+/* =========================================================
+   hugetree — a mountain-climbing gym tracker
+   Dusk-alpine theme. All colors come from the variables
+   below, so you can re-theme the whole app in one place.
+   ========================================================= */
+
+:root {
+  --bg:        #0d1326;   /* deep alpine night              */
+  --bg-glow-1: rgba(103, 212, 245, 0.06);
+  --bg-glow-2: rgba(243, 182, 83, 0.05);
+  --card:      #151d36;   /* card surface                   */
+  --card-2:    #1a2340;   /* raised surface / inputs        */
+  --text:      #e9eefa;   /* snow white text                */
+  --muted:     #94a1c0;   /* secondary text                 */
+  --accent:    #67d4f5;   /* glacier cyan                   */
+  --accent-2:  #f3b653;   /* summit-sun gold                */
+  --danger:    #ef8078;   /* soft alpenglow red             */
+
+  --accent-soft: rgba(103, 212, 245, 0.12);
+  --danger-soft: rgba(239, 128, 120, 0.12);
+  --border:      #273252;
+  --radius:      16px;
+
+  --glow-cyan: 0 0 0 1px rgba(103,212,245,0.35), 0 0 22px rgba(103,212,245,0.22), 0 8px 30px rgba(0,0,0,0.35);
+  --glow-gold: 0 0 0 1px rgba(243,182,83,0.4), 0 0 22px rgba(243,182,83,0.25);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(1200px 500px at 85% -100px, var(--bg-glow-2), transparent 60%),
+    radial-gradient(1000px 600px at 10% 0px, var(--bg-glow-1), transparent 55%),
+    var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  max-width: 940px;
+  margin: 0 auto;
+  padding: 24px 16px 70px;
+}
+
+/* ---------- Header ---------- */
+header {
+  text-align: center;
+  padding: 20px 0 30px;
+}
+
+header h1 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 700;
+  font-size: clamp(2.3rem, 7vw, 3.2rem);
+  letter-spacing: -0.02em;
+  margin: 0;
+  background: linear-gradient(100deg, #eaf6ff 20%, var(--accent) 55%, var(--accent-2) 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 40px rgba(103, 212, 245, 0.25);
+}
+
+header h1 .peak { font-size: 0.85em; -webkit-text-fill-color: initial; }
+
+header p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 1.02rem;
+  letter-spacing: 0.02em;
+}
+
+/* ---------- Cards (glow on hover) ---------- */
+.card {
+  background: linear-gradient(180deg, var(--card) 0%, #121a31 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px;
+  margin-bottom: 20px;
+  transition: box-shadow 0.35s ease, border-color 0.35s ease, transform 0.35s ease;
+}
+
+.card:hover {
+  border-color: rgba(103, 212, 245, 0.45);
+  box-shadow: var(--glow-cyan);
+  transform: translateY(-2px);
+}
+
+.card h2 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.3rem;
+  margin: 0 0 16px;
+  letter-spacing: 0.01em;
+}
+
+.card h2::after {
+  content: "";
+  display: block;
+  width: 44px;
+  height: 2px;
+  margin-top: 8px;
+  background: linear-gradient(90deg, var(--accent), transparent);
+  border-radius: 2px;
+}
+
+/* ---------- Mountain progress card ---------- */
+.progress-layout {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 24px;
+  align-items: center;
+}
+
+@media (max-width: 680px) {
+  .progress-layout { grid-template-columns: 1fr; }
+}
+
+.mountain-scene {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  position: relative;
+  transition: box-shadow 0.35s ease, border-color 0.35s ease;
+}
+
+.mountain-scene:hover {
+  border-color: rgba(243, 182, 83, 0.5);
+  box-shadow: var(--glow-gold);
+}
+
+.mountain-scene svg { display: block; width: 100%; height: auto; }
+
+/* sun radius animates smoothly when the goal changes */
+#sunCore, #sunHalo { transition: r 0.8s cubic-bezier(0.22, 1, 0.36, 1); }
+
+/* clouds scale in place around their own centers */
+.scales {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* climber & tent emoji shrink smoothly with the summit height */
+#climber, #tent { transition: font-size 0.8s cubic-bezier(0.22, 1, 0.36, 1); }
+
+/* the summit flag pops in when the climb is complete */
+@keyframes flagPlant {
+  0%   { opacity: 0; transform: translateY(8px) scale(0.4); }
+  70%  { opacity: 1; transform: translateY(-2px) scale(1.1); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+#summitFlag.planted {
+  display: inline;
+  transform-box: fill-box;
+  transform-origin: bottom center;
+  animation: flagPlant 0.7s ease-out both;
+}
+
+.altitude {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2rem, 5vw, 2.6rem);
+  font-weight: 700;
+  text-shadow: 0 0 24px rgba(103, 212, 245, 0.35);
+}
+
+.altitude .goal { color: var(--muted); font-size: 0.55em; font-weight: 400; text-shadow: none; }
+
+.status-message {
+  margin: 4px 0 16px;
+  color: var(--accent);
+  font-style: italic;
+}
+
+/* Progress bar */
+.bar {
+  background: var(--card-2);
+  border-radius: 999px;
+  height: 16px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.bar-fill {
+  background: linear-gradient(90deg, var(--accent) 0%, #9ae6ff 60%, var(--accent-2) 100%);
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  transition: width 0.6s ease;
+  box-shadow: 0 0 14px rgba(103, 212, 245, 0.55);
+}
+
+.bar-label {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: 6px;
+}
+
+/* Stat tiles */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 18px;
+}
+
+@media (max-width: 460px) {
+  .stats { grid-template-columns: repeat(2, 1fr); }
+}
+
+.stat {
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 8px;
+  text-align: center;
+  transition: box-shadow 0.3s ease, border-color 0.3s ease, transform 0.3s ease;
+}
+
+.stat:hover {
+  border-color: rgba(103, 212, 245, 0.5);
+  box-shadow: 0 0 16px rgba(103, 212, 245, 0.25);
+  transform: translateY(-2px);
+}
+
+.stat .num { font-weight: 700; font-size: 1.2rem; color: var(--accent); }
+.stat .lbl { color: var(--muted); font-size: 0.74rem; letter-spacing: 0.04em; text-transform: uppercase; }
+
+/* ---------- Forms ---------- */
+.field { margin-bottom: 14px; }
+
+label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 6px;
+}
+
+label .opt { color: var(--muted); font-weight: 400; }
+
+input[type="text"],
+input[type="number"],
+input[type="date"],
+textarea {
+  width: 100%;
+  padding: 12px;
+  font-size: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card-2);
+  color: var(--text);
+  font-family: inherit;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+  color-scheme: dark; /* dark-styled date picker */
+}
+
+input:hover, textarea:hover { border-color: rgba(103, 212, 245, 0.4); }
+
+input:focus, textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(103, 212, 245, 0.2), 0 0 14px rgba(103, 212, 245, 0.25);
+}
+
+button:focus-visible {
+  outline: 3px solid rgba(103, 212, 245, 0.5);
+  outline-offset: 2px;
+}
+
+::placeholder { color: #5f6c8d; }
+
+textarea { resize: vertical; min-height: 64px; }
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 14px;
+}
+
+@media (max-width: 540px) {
+  .form-grid { grid-template-columns: 1fr; }
+}
+
+/* ============================================================
+   CONFETTI BURST (adapted from confetti-burst-snippet.html)
+   Multiple shapes + motion styles, all pure CSS/JS front-end.
+   ============================================================ */
+.confetti-piece {
+  position: absolute;
+  width: 8px;
+  height: 12px;
+  border-radius: 2px;
+  opacity: 0.95;
+  pointer-events: none;
+  z-index: 30;
+  animation: confetti-fly 1s cubic-bezier(0.2, 0.7, 0.4, 1) both;
+}
+/* shape variants */
+.confetti-piece.shape-circle { width: 9px; height: 9px; border-radius: 50%; }
+.confetti-piece.shape-strip  { width: 5px; height: 16px; border-radius: 3px; }
+.confetti-piece.shape-square { width: 10px; height: 10px; border-radius: 1px; }
+.confetti-piece.shape-star {
+  width: 12px; height: 12px; background: transparent !important;
+  border-radius: 0;
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+}
+.confetti-piece.shape-star::before { content: ""; display: block; width: 100%; height: 100%; background: inherit; }
+
+/* motion variants */
+@keyframes confetti-fly {
+  to { transform: translate(var(--tx), var(--ty)) rotate(var(--rot)); opacity: 0; }
+}
+@keyframes confetti-fountain {
+  0%   { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 1; }
+  45%  { transform: translate(calc(var(--tx) * 0.5), var(--ty)) rotate(calc(var(--rot) * 0.5)) scale(1.1); opacity: 1; }
+  100% { transform: translate(var(--tx), calc(var(--ty) * -0.4)) rotate(var(--rot)) scale(0.8); opacity: 0; }
+}
+@keyframes confetti-spiral {
+  0%   { transform: translate(0,0) rotate(0deg) scale(0.6); opacity: 1; }
+  50%  { transform: translate(calc(var(--tx) * 0.3), calc(var(--ty) * 0.7)) rotate(calc(var(--rot) * 2)) scale(1.2); opacity: 1; }
+  100% { transform: translate(var(--tx), var(--ty)) rotate(calc(var(--rot) * 4)) scale(0.5); opacity: 0; }
+}
+@keyframes confetti-drift {
+  0%   { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+  100% { transform: translate(var(--tx), calc(-1 * var(--ty))) rotate(var(--rot)); opacity: 0; }
+}
+.confetti-piece.motion-fountain { animation-name: confetti-fountain; animation-duration: 1.3s; }
+.confetti-piece.motion-spiral   { animation-name: confetti-spiral;   animation-duration: 1.4s; animation-timing-function: ease-out; }
+.confetti-piece.motion-drift    { animation-name: confetti-drift;    animation-duration: 1.8s; animation-timing-function: ease-in; }
+
+@media (prefers-reduced-motion: reduce) {
+  .confetti-piece { animation: none; display: none; }
+}
+/* --- end confetti CSS --- */
+
+.form-grid .full { grid-column: 1 / -1; }
+
+/* RPE field fades out when RPE mode is off */
+.rpe-off { opacity: 0.4; }
+
+/* ---------- Buttons ---------- */
+button {
+  font-family: inherit;
+  font-size: 1rem;
+  padding: 12px 18px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card-2);
+  color: var(--text);
+  cursor: pointer;
+  transition: box-shadow 0.25s ease, border-color 0.25s ease, transform 0.25s ease, background 0.25s ease;
+}
+
+button:hover {
+  border-color: rgba(103, 212, 245, 0.55);
+  box-shadow: 0 0 16px rgba(103, 212, 245, 0.3);
+  transform: translateY(-1px);
+}
+
+button:active { transform: translateY(0); }
+
+.btn-primary {
+  background: linear-gradient(135deg, #2b8fb8 0%, var(--accent) 100%);
+  border-color: transparent;
+  color: #071120;
+  font-weight: 700;
+}
+
+.btn-primary:hover {
+  box-shadow: 0 0 22px rgba(103, 212, 245, 0.55);
+  border-color: transparent;
+}
+
+.btn-gold {
+  background: linear-gradient(135deg, #c98a2e 0%, var(--accent-2) 100%);
+  border-color: transparent;
+  color: #211302;
+  font-weight: 700;
+}
+
+.btn-gold:hover {
+  box-shadow: 0 0 22px rgba(243, 182, 83, 0.55);
+  border-color: transparent;
+}
+
+.btn-danger {
+  background: var(--danger-soft);
+  border-color: rgba(239, 128, 120, 0.35);
+  color: var(--danger);
+}
+
+.btn-danger:hover {
+  border-color: rgba(239, 128, 120, 0.7);
+  box-shadow: 0 0 16px rgba(239, 128, 120, 0.35);
+}
+
+.btn-chip {
+  padding: 8px 14px;
+  font-size: 0.9rem;
+}
+
+.btn-chip.active {
+  background: linear-gradient(135deg, #2b8fb8 0%, var(--accent) 100%);
+  border-color: transparent;
+  color: #071120;
+  font-weight: 700;
+  box-shadow: 0 0 14px rgba(103, 212, 245, 0.4);
+}
+
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+/* Toggle switch for RPE mode */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.switch { position: relative; width: 50px; height: 28px; flex-shrink: 0; }
+.switch input { opacity: 0; width: 100%; height: 100%; position: absolute; margin: 0; cursor: pointer; }
+.slider {
+  position: absolute; inset: 0;
+  background: #2a3556;
+  border-radius: 999px;
+  transition: background 0.25s, box-shadow 0.25s;
+  pointer-events: none;
+}
+.slider::before {
+  content: "";
+  position: absolute;
+  width: 22px; height: 22px;
+  left: 3px; top: 3px;
+  background: #d9e4f5;
+  border-radius: 50%;
+  transition: transform 0.25s, background 0.25s;
+}
+.switch input:checked + .slider {
+  background: linear-gradient(135deg, #2b8fb8, var(--accent));
+  box-shadow: 0 0 14px rgba(103, 212, 245, 0.5);
+}
+.switch input:checked + .slider::before { transform: translateX(22px); background: #fff; }
+.switch input:focus-visible + .slider { outline: 3px solid rgba(103, 212, 245, 0.5); }
+
+/* ---------- Inline messages (no alert boxes!) ---------- */
+.msg {
+  display: none;
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  border: 1px solid transparent;
+}
+.msg.show { display: block; }
+.msg.ok    { background: var(--accent-soft); color: var(--accent); border-color: rgba(103,212,245,0.3); }
+.msg.error { background: var(--danger-soft); color: var(--danger); border-color: rgba(239,128,120,0.3); }
+
+/* In-page confirmation panel */
+.confirm {
+  display: none;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid rgba(239, 128, 120, 0.35);
+  background: var(--danger-soft);
+  border-radius: 10px;
+}
+.confirm.show { display: block; }
+.confirm p { margin: 0 0 10px; }
+
+/* ---------- Workout history ---------- */
+.history-date {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--accent-2);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.98rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  margin: 20px 0 10px;
+}
+
+.history-date:first-child { margin-top: 4px; }
+
+.history-date::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(243, 182, 83, 0.45), transparent);
+}
+
+.workout {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: var(--card-2);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+.workout:hover {
+  border-color: rgba(103, 212, 245, 0.45);
+  box-shadow: 0 0 18px rgba(103, 212, 245, 0.18);
+  transform: translateX(3px);
+}
+
+.workout .info { flex: 1; min-width: 200px; }
+.workout .exercise { font-weight: 700; }
+.workout .date { color: var(--muted); font-size: 0.85rem; }
+.workout .details { font-size: 0.9rem; margin-top: 4px; color: #c4cee6; }
+.workout .notes { color: var(--muted); font-size: 0.88rem; margin-top: 4px; font-style: italic; }
+
+.workout .side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.meters-badge {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid rgba(103, 212, 245, 0.3);
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  text-shadow: 0 0 10px rgba(103, 212, 245, 0.5);
+}
+
+.empty-state {
+  text-align: center;
+  color: var(--muted);
+  padding: 24px 0;
+}
+
+/* ---------- Help section ---------- */
+.help ul { padding-left: 20px; margin: 8px 0 0; }
+.help li { margin-bottom: 6px; }
+
+.privacy-note {
+  background: var(--accent-soft);
+  border: 1px solid rgba(103, 212, 245, 0.25);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 0.92rem;
+  margin-top: 12px;
+}
+
+.hint { color: var(--muted); font-size: 0.88rem; margin: 6px 0 0; }
+
+/* Star twinkle in the mountain scene */
+@keyframes twinkle {
+  0%, 100% { opacity: 0.9; }
+  50%      { opacity: 0.25; }
+}
+.star { animation: twinkle 3.4s ease-in-out infinite; }
+.star:nth-child(2n)  { animation-delay: 1.1s; animation-duration: 4.2s; }
+.star:nth-child(3n)  { animation-delay: 2.0s; animation-duration: 5.0s; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <!-- ============ 1. HEADER ============ -->
+  <header>
+    <h1><span class="peak">⛰️</span> hugetree</h1>
+    <p>Log your workouts. Climb your mountain. Keep your data safe.</p>
+  </header>
+
+  <!-- ============ 2. MOUNTAIN PROGRESS CARD ============ -->
+  <section class="card" aria-labelledby="progress-title">
+    <h2 id="progress-title">Your climb</h2>
+
+    <div class="progress-layout">
+
+      <!-- The mountain scene: pure inline SVG, no image files.
+           The sun's size is driven by the goal height (bigger goal,
+           bigger mountain, so the sun looks smaller by comparison). -->
+      <div class="mountain-scene" aria-hidden="true">
+        <svg id="mountainSvg" viewBox="0 0 320 480" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <!-- Dusk sky -->
+            <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"  stop-color="#141c3d"/>
+              <stop offset="45%" stop-color="#2c335f"/>
+              <stop offset="78%" stop-color="#6b5a77"/>
+              <stop offset="100%" stop-color="#c07a5e"/>
+            </linearGradient>
+            <!-- Sun glow halo -->
+            <radialGradient id="sunGlow">
+              <stop offset="0%"   stop-color="#ffd98a" stop-opacity="0.85"/>
+              <stop offset="40%"  stop-color="#ffbe63" stop-opacity="0.35"/>
+              <stop offset="100%" stop-color="#ffbe63" stop-opacity="0"/>
+            </radialGradient>
+            <radialGradient id="sunBody">
+              <stop offset="0%"  stop-color="#fff3cf"/>
+              <stop offset="70%" stop-color="#ffd071"/>
+              <stop offset="100%" stop-color="#f5a94a"/>
+            </radialGradient>
+            <!-- Rock faces -->
+            <linearGradient id="rockLight" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%"  stop-color="#4a5578"/>
+              <stop offset="100%" stop-color="#333d5f"/>
+            </linearGradient>
+            <linearGradient id="rockDark" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%"  stop-color="#2c3554"/>
+              <stop offset="100%" stop-color="#1f2740"/>
+            </linearGradient>
+            <!-- Snow -->
+            <linearGradient id="snow" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"  stop-color="#ffffff"/>
+              <stop offset="100%" stop-color="#c9d8ee"/>
+            </linearGradient>
+            <!-- Glowing route -->
+            <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+              <feGaussianBlur stdDeviation="2.4" result="blur"/>
+              <feMerge>
+                <feMergeNode in="blur"/>
+                <feMergeNode in="SourceGraphic"/>
+              </feMerge>
+            </filter>
+          </defs>
+
+          <!-- sky -->
+          <rect width="320" height="480" fill="url(#sky)"/>
+
+          <!-- stars -->
+          <g fill="#ffffff">
+            <circle class="star" cx="30"  cy="34"  r="1.4"/>
+            <circle class="star" cx="70"  cy="70"  r="1.1"/>
+            <circle class="star" cx="118" cy="28"  r="1.5"/>
+            <circle class="star" cx="160" cy="62"  r="1.0"/>
+            <circle class="star" cx="48"  cy="118" r="1.2"/>
+            <circle class="star" cx="140" cy="104" r="1.0"/>
+            <circle class="star" cx="96"  cy="150" r="1.1"/>
+            <circle class="star" cx="200" cy="26"  r="1.2"/>
+          </g>
+
+          <!-- the sun: halo + core. Both radii are set from JavaScript
+               based on the goal height, so raising your target visibly
+               shifts the sense of scale in the scene. -->
+          <circle id="sunHalo" cx="256" cy="70" r="52" fill="url(#sunGlow)"/>
+          <circle id="sunCore" cx="256" cy="70" r="24" fill="url(#sunBody)"/>
+
+          <!-- far mountain range (silhouette) -->
+          <path d="M0 312 L42 240 L78 300 L118 232 L158 302 L204 244 L246 306 L286 252 L320 300 L320 480 L0 480 Z"
+                fill="#222b4a" opacity="0.9"/>
+          <!-- mid range -->
+          <path d="M0 352 L54 282 L96 344 L150 276 L206 350 L258 292 L320 348 L320 480 L0 480 Z"
+                fill="#28325a" opacity="0.95"/>
+
+          <!-- THE mountain -->
+          <!-- sunlit face -->
+          <path d="M160 58 L26 448 L160 448 Z" fill="url(#rockLight)"/>
+          <!-- shadowed face -->
+          <path d="M160 58 L294 448 L160 448 Z" fill="url(#rockDark)"/>
+          <!-- ridge highlights -->
+          <path d="M160 58 L160 448" stroke="#5a668f" stroke-width="1.6" opacity="0.6"/>
+          <path d="M124 168 L96 258 M198 190 L226 286" stroke="#1c2440" stroke-width="2" opacity="0.5" fill="none"/>
+
+          <!-- snowcap with a jagged snowline -->
+          <path d="M160 58 L128 152 L140 136 L150 158 L160 142 L172 162 L184 142 L194 156 Z"
+                fill="url(#snow)"/>
+          <!-- snow glints -->
+          <path d="M156 84 L152 104 M166 90 L170 112" stroke="#ffffff" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+
+          <!-- drifting clouds across the slopes (each cluster scales
+               with the summit height, like the sun) -->
+          <g id="cloud1" class="scales" fill="#dfe7f5" opacity="0.5">
+            <ellipse cx="86"  cy="238" rx="36" ry="9"/>
+            <ellipse cx="110" cy="230" rx="24" ry="7"/>
+          </g>
+          <g id="cloud2" class="scales" fill="#dfe7f5" opacity="0.5">
+            <ellipse cx="236" cy="320" rx="40" ry="10"/>
+            <ellipse cx="210" cy="312" rx="22" ry="7"/>
+          </g>
+
+          <!-- foothill snowfield & base camp -->
+          <path d="M0 448 Q160 424 320 448 L320 480 L0 480 Z" fill="#b9c8e2"/>
+          <text id="tent" x="84" y="446" font-size="22">⛺</text>
+
+          <!-- summit flag: hidden until the climber reaches the top -->
+          <g id="summitFlag" style="display:none;">
+            <line x1="160" y1="56" x2="160" y2="26" stroke="#e9eefa" stroke-width="3"/>
+            <polygon points="160,26 190,35 160,44" fill="#ef6a5e"/>
+          </g>
+
+          <!-- climbing route: switchbacks up the face.
+               Grey dashes are the full route; the glowing cyan line
+               fills in as progress grows (set from JavaScript). -->
+          <path id="routeBg"
+                d="M148 442 L204 396 L118 348 L196 300 L126 252 L188 206 L138 160 L174 120 L160 74"
+                fill="none" stroke="#ffffff" stroke-width="3.4"
+                stroke-dasharray="5 7" stroke-linejoin="round" opacity="0.55"/>
+          <path id="routeFill"
+                d="M148 442 L204 396 L118 348 L196 300 L126 252 L188 206 L138 160 L174 120 L160 74"
+                fill="none" stroke="#7de3ff" stroke-width="3.6"
+                stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+
+          <!-- the climber, moved along the route by JavaScript -->
+          <text id="climber" font-size="24" text-anchor="middle">🧗</text>
+        </svg>
+      </div>
+
+      <!-- Numbers next to the mountain -->
+      <div>
+        <div class="altitude">
+          <span id="currentMeters">0m</span>
+          <span class="goal"> / <span id="goalMetersLabel">1000</span>m</span>
+        </div>
+        <p class="status-message" id="statusMessage">Base camp is ready. Start your climb.</p>
+
+        <div class="bar" role="progressbar" aria-label="Climb progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="barOuter">
+          <div class="bar-fill" id="barFill"></div>
+        </div>
+        <div class="bar-label">
+          <span id="percentLabel">0% climbed</span>
+          <span id="remainingLabel">1000m to go</span>
+        </div>
+
+        <div class="stats">
+          <div class="stat"><div class="num" id="statWorkouts">0</div><div class="lbl">workouts</div></div>
+          <div class="stat"><div class="num" id="statSets">0</div><div class="lbl">total sets</div></div>
+          <div class="stat"><div class="num" id="statReps">0</div><div class="lbl">total reps</div></div>
+          <div class="stat"><div class="num" id="statMeters">0m</div><div class="lbl">meters climbed</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 3. MOUNTAIN SETTINGS ============ -->
+  <section class="card" aria-labelledby="settings-title">
+    <h2 id="settings-title">Mountain settings</h2>
+
+    <div class="field">
+      <label for="customGoal">Summit height (meters)</label>
+      <div class="btn-row">
+        <button type="button" class="btn-chip goal-chip" data-goal="500">500m</button>
+        <button type="button" class="btn-chip goal-chip" data-goal="1000">1000m</button>
+        <button type="button" class="btn-chip goal-chip" data-goal="2000">2000m</button>
+        <button type="button" class="btn-chip goal-chip" data-goal="5000">5000m</button>
+      </div>
+      <div class="btn-row" style="margin-top:10px;">
+        <input type="number" id="customGoal" min="1" step="1" placeholder="Custom height, e.g. 1500" style="max-width:220px;">
+        <button type="button" id="setCustomGoal" class="btn-chip">Set custom summit</button>
+        <button type="button" id="resetGoal" class="btn-chip">Reset to 1000m</button>
+      </div>
+      <p class="hint">Raise the summit and watch the sun shrink into the distance — the higher you aim, the bigger the mountain feels.</p>
+    </div>
+
+    <div class="toggle-row">
+      <span class="switch">
+        <input type="checkbox" id="rpeToggle" aria-describedby="rpeHelp">
+        <span class="slider"></span>
+      </span>
+      <div>
+        <label for="rpeToggle" style="margin:0;">RPE mode</label>
+        <p class="hint" id="rpeHelp">RPE is your Rate of Perceived Exertion from 1 to 10. When RPE mode is on, harder workouts earn more meters: sets × reps × (RPE ÷ 10). When it's off, meters are simply sets × reps.</p>
+      </div>
+    </div>
+
+    <div class="msg" id="settingsMsg" role="status"></div>
+  </section>
+
+  <!-- ============ 4. ADD WORKOUT FORM ============ -->
+  <section class="card" aria-labelledby="add-title">
+    <h2 id="add-title">Add workout</h2>
+
+    <div class="form-grid">
+      <div class="field">
+        <label for="wDate">Date</label>
+        <input type="date" id="wDate">
+      </div>
+      <div class="field">
+        <label for="wExercise">Exercise name</label>
+        <input type="text" id="wExercise" placeholder="e.g. Squat" required>
+      </div>
+      <div class="field">
+        <label for="wSets">Sets</label>
+        <input type="number" id="wSets" min="1" step="1" placeholder="e.g. 4" required>
+      </div>
+      <div class="field">
+        <label for="wReps">Reps per set</label>
+        <input type="number" id="wReps" min="1" step="1" placeholder="e.g. 8" required>
+      </div>
+      <div class="field">
+        <label for="wWeight">Weight <span class="opt">(optional)</span></label>
+        <input type="text" id="wWeight" placeholder="e.g. 60kg, 135 lbs, bodyweight">
+      </div>
+      <div class="field" id="rpeField">
+        <label for="wRPE">RPE <span class="opt">(optional, 1–10)</span></label>
+        <input type="number" id="wRPE" min="1" max="10" step="0.5" placeholder="e.g. 8">
+      </div>
+      <div class="field full">
+        <label for="wNotes">Notes <span class="opt">(optional)</span></label>
+        <textarea id="wNotes" placeholder="How did it feel?"></textarea>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button type="button" class="btn-primary" id="addWorkoutBtn">Add Workout</button>
+      <button type="button" id="clearFormBtn">Clear form</button>
+    </div>
+    <p class="hint">Your entries stay in the form after adding, so logging a similar workout is quick. Clear form empties every field.</p>
+    <div class="msg" id="formMsg" role="status"></div>
+  </section>
+
+  <!-- ============ 5. DATA CONTROLS ============ -->
+  <section class="card" aria-labelledby="data-title">
+    <h2 id="data-title">Data controls</h2>
+
+    <div class="btn-row">
+      <button type="button" class="btn-primary" id="downloadBtn">Download Progress File</button>
+      <button type="button" id="uploadBtn">Upload Previous Progress File</button>
+      <!-- hidden real file input; the button above clicks it -->
+      <input type="file" id="uploadInput" accept=".json,application/json" hidden>
+      <button type="button" class="btn-gold" id="wordReportBtn">Word Document Report for AI Analysis</button>
+      <button type="button" class="btn-danger" id="clearBtn">Clear All Data</button>
+    </div>
+    <p class="hint">The Word report bundles your settings, stats, and full workout log into a document you can hand to an AI assistant for training analysis. Everything is generated on this device — nothing is sent anywhere.</p>
+
+    <!-- In-page confirmation before replacing data with an uploaded file -->
+    <div class="confirm" id="importConfirm">
+      <p id="importConfirmText">Replace your current data with this file?</p>
+      <div class="btn-row">
+        <button type="button" class="btn-danger" id="importConfirmYes">Replace Current Data</button>
+        <button type="button" id="importConfirmNo">Cancel</button>
+      </div>
+    </div>
+
+    <!-- In-page confirmation before clearing everything -->
+    <div class="confirm" id="clearConfirm">
+      <p>This removes all workouts and resets your settings to the defaults (1000m summit, RPE mode off). Download a progress file first if you want a backup.</p>
+      <div class="btn-row">
+        <button type="button" class="btn-danger" id="clearConfirmYes">Yes, clear everything</button>
+        <button type="button" id="clearConfirmNo">Cancel</button>
+      </div>
+    </div>
+
+    <div class="msg" id="dataMsg" role="status"></div>
+  </section>
+
+  <!-- ============ 6. WORKOUT HISTORY ============ -->
+  <section class="card" aria-labelledby="history-title">
+    <h2 id="history-title">Workout history</h2>
+    <div id="historyList"></div>
+    <div class="msg" id="historyMsg" role="status"></div>
+  </section>
+
+  <!-- ============ 7. HELP / PRIVACY NOTE ============ -->
+  <section class="card help" aria-labelledby="help-title">
+    <h2 id="help-title">Help &amp; privacy</h2>
+    <ul>
+      <li>hugetree works completely offline — just open this file in a browser.</li>
+      <li>Your data is stored only in this browser, on this device.</li>
+      <li><strong>Download Progress File</strong> creates a backup of everything.</li>
+      <li><strong>Upload Previous Progress File</strong> lets you continue on another browser or device.</li>
+      <li><strong>Word Document Report for AI Analysis</strong> exports a readable report of your training data.</li>
+      <li>Clearing your browser data may delete saved workouts — keep a downloaded backup if your climb matters to you.</li>
+    </ul>
+    <p class="privacy-note">Your workout data is stored only in this browser. Download your data file if you want a backup or want to continue on another device.</p>
+  </section>
+
+</div>
+
+<script>
+/* =========================================================
+   hugetree — JavaScript
+   Plain vanilla JS, organized top to bottom:
+   1. Constants & state
+   2. localStorage load/save
+   3. Meters formula
+   4. Rendering (progress, mountain, history, settings)
+   5. Inline messages
+   6. Event handlers (form, settings, data controls)
+   7. Word report export
+   ========================================================= */
+
+/* ---------- 1. Constants & state ---------- */
+
+// Exact localStorage keys (kept from the original app so old data survives)
+const KEY_WORKOUTS = "treeGymTrackerWorkouts";
+const KEY_GOAL     = "treeGymTrackerGoalMeters";
+const KEY_USE_RPE  = "treeGymTrackerUseRPE";
+
+const DEFAULT_GOAL = 1000;
+const APP_NAME = "hugetree";
+
+// In-memory state (kept in sync with localStorage)
+let workouts = [];           // array of workout objects
+let goalMeters = DEFAULT_GOAL;
+let useRPE = false;
+
+// Holds a parsed upload while we wait for the user to confirm
+let pendingImport = null;
+
+/* ---------- 2. localStorage load/save ---------- */
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(KEY_WORKOUTS);
+    const parsed = raw ? JSON.parse(raw) : [];
+    workouts = Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    workouts = []; // corrupted data? start fresh rather than crash
+  }
+
+  const savedGoal = parseInt(localStorage.getItem(KEY_GOAL), 10);
+  goalMeters = (Number.isFinite(savedGoal) && savedGoal >= 1) ? savedGoal : DEFAULT_GOAL;
+
+  useRPE = localStorage.getItem(KEY_USE_RPE) === "true";
+}
+
+function saveWorkouts() { localStorage.setItem(KEY_WORKOUTS, JSON.stringify(workouts)); }
+function saveGoal()     { localStorage.setItem(KEY_GOAL, String(goalMeters)); }
+function saveUseRPE()   { localStorage.setItem(KEY_USE_RPE, String(useRPE)); }
+
+/* ---------- 3. Meters formula ---------- */
+
+// Normal mode:  meters = sets × reps
+// RPE mode:     meters = sets × reps × (RPE ÷ 10)
+// (Older saved workouts without reps count as 1 rep per set.)
+function calcMeters(sets, reps, rpe) {
+  const effectiveReps = (Number.isFinite(Number(reps)) && Number(reps) >= 1) ? Number(reps) : 1;
+  let meters = sets * effectiveReps;
+  if (useRPE && rpe !== null && rpe !== undefined && rpe !== "") {
+    meters = sets * effectiveReps * (Number(rpe) / 10);
+  }
+  return Math.round(meters);
+}
+
+// Recalculate meters for every saved workout (used when RPE mode changes
+// or when older data is imported)
+function recalcAllMeters() {
+  workouts.forEach(w => { w.meters = calcMeters(w.sets, w.reps, w.rpe); });
+  saveWorkouts();
+}
+
+// A unique id for each workout, with a fallback for older browsers
+function makeId() {
+  if (window.crypto && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "w-" + Date.now() + "-" + Math.floor(Math.random() * 100000);
+}
+
+/* ---------- 4. Rendering ---------- */
+
+// Motivational message based on percent climbed
+function statusFor(percent) {
+  if (percent >= 100) return "Summit reached. Incredible work.";
+  if (percent >= 75)  return "The summit is in sight.";
+  if (percent >= 50)  return "Halfway up the mountain.";
+  if (percent >= 25)  return "You are building momentum.";
+  if (percent >= 1)   return "You are leaving base camp.";
+  return "Base camp is ready. Start your climb.";
+}
+
+// Update every number, the bar, the message, and the mountain
+function renderProgress() {
+  const totalMeters = workouts.reduce((sum, w) => sum + (w.meters || 0), 0);
+  const totalSets   = workouts.reduce((sum, w) => sum + (w.sets || 0), 0);
+  const totalReps   = workouts.reduce((sum, w) => {
+    const r = Number(w.reps);
+    const s = Number(w.sets);
+    return sum + ((Number.isFinite(r) && Number.isFinite(s)) ? r * s : 0);
+  }, 0);
+
+  const rawPercent = (totalMeters / goalMeters) * 100;
+  const cappedPercent = Math.min(100, rawPercent); // bar & climber stop at 100%
+
+  document.getElementById("currentMeters").textContent  = totalMeters + "m";
+  document.getElementById("goalMetersLabel").textContent = goalMeters;
+  document.getElementById("statusMessage").textContent  = statusFor(rawPercent);
+
+  document.getElementById("barFill").style.width = cappedPercent + "%";
+  document.getElementById("barOuter").setAttribute("aria-valuenow", Math.round(cappedPercent));
+  document.getElementById("percentLabel").textContent =
+    Math.floor(rawPercent) + "% climbed";
+
+  const remaining = Math.max(0, goalMeters - totalMeters);
+  document.getElementById("remainingLabel").textContent =
+    remaining > 0 ? remaining + "m to go" : "Goal reached! 🎉";
+
+  document.getElementById("statWorkouts").textContent = workouts.length;
+  document.getElementById("statSets").textContent     = totalSets;
+  document.getElementById("statReps").textContent     = totalReps;
+  document.getElementById("statMeters").textContent   = totalMeters + "m";
+
+  renderMountain(cappedPercent / 100);
+}
+
+// Move the climber and fill the glowing route on the mountain
+function renderMountain(fraction) {
+  const route   = document.getElementById("routeFill");
+  const climber = document.getElementById("climber");
+  const length  = route.getTotalLength();
+
+  // Fill the route up to the current progress using a dash trick:
+  // show "fraction" of the line, hide the rest.
+  route.style.strokeDasharray  = length;
+  route.style.strokeDashoffset = length * (1 - fraction);
+
+  // Place the climber at that point along the route
+  const point = route.getPointAtLength(length * fraction);
+  climber.setAttribute("x", point.x);
+  climber.setAttribute("y", point.y + 8); // emoji anchor tweak
+
+  // The flag is only planted once the climber reaches the summit
+  const flag = document.getElementById("summitFlag");
+  if (fraction >= 1) {
+    flag.classList.add("planted");
+    flag.style.display = "inline";
+  } else {
+    flag.classList.remove("planted");
+    flag.style.display = "none";
+  }
+}
+
+// Scale the scenery from the summit goal. A taller mountain makes the
+// sun, the climber, the base-camp tent, and the clouds all look smaller
+// and more distant, as if the whole scene has grown around them.
+// The scale follows the log of the goal so 500m → 10,000m all feel
+// distinct without anything vanishing or swallowing the sky.
+function renderScenery() {
+  // 0 = smallest goals (big, close scenery), 1 = huge goals (tiny, distant)
+  // log10(100) = 2 maps to 0; log10(20000) ≈ 4.3 maps near 1
+  const t = Math.min(1, Math.max(0, (Math.log10(Math.max(goalMeters, 100)) - 2) / 2.3));
+
+  // Sun: radius shrinks from 34 down to 12
+  const r = 34 - t * (34 - 12);
+  document.getElementById("sunCore").setAttribute("r", r.toFixed(1));
+  document.getElementById("sunHalo").setAttribute("r", (r * 2.2).toFixed(1));
+
+  // Climber & tent: emoji font-size shrinks with the same curve
+  document.getElementById("climber").setAttribute("font-size", (26 - t * (26 - 13)).toFixed(1));
+  document.getElementById("tent").setAttribute("font-size", (24 - t * (24 - 11)).toFixed(1));
+
+  // Clouds: each cluster scales in place around its own center
+  const cloudScale = (1.15 - t * 0.65).toFixed(3); // 1.15 → 0.5
+  document.getElementById("cloud1").style.transform = "scale(" + cloudScale + ")";
+  document.getElementById("cloud2").style.transform = "scale(" + cloudScale + ")";
+}
+
+// Show the goal & RPE mode in the settings card and the form
+function renderSettings() {
+  document.querySelectorAll(".goal-chip").forEach(btn => {
+    btn.classList.toggle("active", Number(btn.dataset.goal) === goalMeters);
+  });
+
+  document.getElementById("rpeToggle").checked = useRPE;
+
+  const rpeField = document.getElementById("rpeField");
+  const rpeInput = document.getElementById("wRPE");
+  rpeField.classList.toggle("rpe-off", !useRPE);
+  rpeInput.disabled = !useRPE;
+}
+
+// Escape user text before inserting it into HTML (safety first!)
+function esc(str) {
+  return String(str)
+    .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+}
+
+// Turn "2026-06-11" into a friendlier "11 Jun 2026"
+function prettyDate(iso) {
+  const d = new Date(iso + "T00:00:00");
+  if (isNaN(d)) return iso;
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+
+// Build the history list, newest first
+function renderHistory() {
+  const list = document.getElementById("historyList");
+
+  if (workouts.length === 0) {
+    list.innerHTML = '<div class="empty-state">No workouts yet. Log your first climb. 🏔️</div>';
+    return;
+  }
+
+  const sorted = [...workouts].sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    return (a.createdAt || "") < (b.createdAt || "") ? 1 : -1;
+  });
+
+  // Group workouts under a heading for each training date, newest first
+  let html = "";
+  let lastDate = null;
+  for (const w of sorted) {
+    if (w.date !== lastDate) {
+      const dayMeters = sorted
+        .filter(x => x.date === w.date)
+        .reduce((s, x) => s + (x.meters || 0), 0);
+      html += `<div class="history-date">${prettyDate(w.date)} · +${dayMeters}m</div>`;
+      lastDate = w.date;
+    }
+
+    const bits = [w.sets + " sets"];
+    if (w.reps !== null && w.reps !== "" && w.reps !== undefined) bits.push(w.reps + " reps");
+    if (w.weight) bits.push(esc(w.weight));
+    if (w.rpe !== null && w.rpe !== "" && w.rpe !== undefined) bits.push("RPE " + w.rpe);
+
+    html += `
+      <div class="workout">
+        <div class="info">
+          <div class="exercise">${esc(w.exercise)}</div>
+          <div class="details">${bits.join(" · ")}</div>
+          ${w.notes ? `<div class="notes">${esc(w.notes)}</div>` : ""}
+        </div>
+        <div class="side">
+          <span class="meters-badge">+${w.meters}m</span>
+          <button type="button" class="btn-danger btn-chip" data-delete="${esc(w.id)}">Delete</button>
+        </div>
+      </div>`;
+  }
+  list.innerHTML = html;
+}
+
+// One call to refresh everything on screen
+function renderAll() {
+  renderSettings();
+  renderProgress();
+  renderScenery();
+  renderHistory();
+}
+
+/* ---------- 5. Inline messages ---------- */
+
+const msgTimers = {};
+
+function showMsg(elementId, text, type) {
+  const el = document.getElementById(elementId);
+  el.textContent = text;
+  el.className = "msg show " + (type === "error" ? "error" : "ok");
+  clearTimeout(msgTimers[elementId]);
+  msgTimers[elementId] = setTimeout(() => { el.className = "msg"; }, 5000);
+}
+
+/* ---------- 6. Event handlers ---------- */
+
+/* --- Add workout form --- */
+
+document.getElementById("addWorkoutBtn").addEventListener("click", () => {
+  const date     = document.getElementById("wDate").value;
+  const exercise = document.getElementById("wExercise").value.trim();
+  const setsVal  = document.getElementById("wSets").value;
+  const repsVal  = document.getElementById("wReps").value;
+  const weight   = document.getElementById("wWeight").value.trim();
+  const rpeVal   = document.getElementById("wRPE").value;
+  const notes    = document.getElementById("wNotes").value.trim();
+
+  // --- validation, with friendly inline messages ---
+  if (!exercise) {
+    showMsg("formMsg", "Please enter an exercise name.", "error");
+    return;
+  }
+  const sets = parseInt(setsVal, 10);
+  if (!Number.isFinite(sets) || sets < 1) {
+    showMsg("formMsg", "Sets must be a whole number of at least 1.", "error");
+    return;
+  }
+  const reps = parseInt(repsVal, 10);
+  if (!Number.isFinite(reps) || reps < 1) {
+    showMsg("formMsg", "Reps must be a whole number of at least 1 — meters are earned per rep now.", "error");
+    return;
+  }
+  let rpe = null;
+  if (useRPE && rpeVal !== "") {
+    rpe = parseFloat(rpeVal);
+    if (!Number.isFinite(rpe) || rpe < 1 || rpe > 10) {
+      showMsg("formMsg", "RPE must be between 1 and 10.", "error");
+      return;
+    }
+  }
+
+  // --- build & save the workout ---
+  const workout = {
+    id: makeId(),
+    date: date || todayISO(),
+    exercise: exercise,
+    sets: sets,
+    reps: reps,
+    weight: weight,
+    rpe: rpe,
+    notes: notes,
+    meters: calcMeters(sets, reps, rpe),
+    createdAt: new Date().toISOString()
+  };
+
+  workouts.push(workout);
+  saveWorkouts();
+
+  // The form keeps its values so you can log similar workouts quickly —
+  // use the "Clear form" button when you want a blank slate.
+
+  renderAll();
+  showMsg("formMsg", `Climbed +${workout.meters}m with ${workout.exercise}! 🏔️`, "ok");
+});
+
+/* --- Clear form (optional reset of the inputs) --- */
+
+document.getElementById("clearFormBtn").addEventListener("click", () => {
+  ["wExercise", "wSets", "wReps", "wWeight", "wRPE", "wNotes"].forEach(id => {
+    document.getElementById(id).value = "";
+  });
+  document.getElementById("wDate").value = todayISO(); // date resets to today
+  showMsg("formMsg", "Form cleared.", "ok");
+});
+
+/* --- Delete a workout (event delegation on the list) --- */
+
+document.getElementById("historyList").addEventListener("click", (e) => {
+  const id = e.target.dataset && e.target.dataset.delete;
+  if (!id) return;
+  workouts = workouts.filter(w => w.id !== id);
+  saveWorkouts();
+  renderAll();
+  showMsg("historyMsg", "Workout deleted.", "ok");
+});
+
+/* --- Mountain settings --- */
+
+function setGoal(value) {
+  goalMeters = value;
+  saveGoal();
+  renderAll();
+  showMsg("settingsMsg", "Summit set to " + goalMeters + "m. ⛰️", "ok");
+}
+
+document.querySelectorAll(".goal-chip").forEach(btn => {
+  btn.addEventListener("click", () => setGoal(Number(btn.dataset.goal)));
+});
+
+document.getElementById("setCustomGoal").addEventListener("click", () => {
+  const value = parseInt(document.getElementById("customGoal").value, 10);
+  if (!Number.isFinite(value) || value < 1) {
+    showMsg("settingsMsg", "Please enter a summit height of at least 1 meter.", "error");
+    return;
+  }
+  setGoal(value);
+  document.getElementById("customGoal").value = "";
+});
+
+document.getElementById("resetGoal").addEventListener("click", () => setGoal(DEFAULT_GOAL));
+
+document.getElementById("rpeToggle").addEventListener("change", (e) => {
+  useRPE = e.target.checked;
+  saveUseRPE();
+  recalcAllMeters();  // every workout's meters change with the mode
+  renderAll();
+  showMsg("settingsMsg", useRPE
+    ? "RPE mode on. Meters are now sets × reps × (RPE ÷ 10)."
+    : "RPE mode off. Meters are sets × reps.", "ok");
+});
+
+/* --- Data controls: download --- */
+
+document.getElementById("downloadBtn").addEventListener("click", () => {
+  const data = {
+    appName: APP_NAME,
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    settings: { goalMeters: goalMeters, useRPE: useRPE },
+    workouts: workouts
+  };
+
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "hugetree-progress-" + todayISO() + ".json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+
+  showMsg("dataMsg", "Progress file downloaded. Keep it somewhere safe!", "ok");
+});
+
+/* --- Data controls: upload --- */
+
+document.getElementById("uploadBtn").addEventListener("click", () => {
+  document.getElementById("uploadInput").click();
+});
+
+document.getElementById("uploadInput").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      const check = validateImport(data);
+      if (!check.ok) {
+        showMsg("dataMsg", check.message, "error");
+        return;
+      }
+      pendingImport = check;
+      document.getElementById("importConfirmText").textContent =
+        `This file contains ${check.workouts.length} workout(s) ` +
+        `(summit ${check.goalMeters}m, RPE mode ${check.useRPE ? "on" : "off"}). ` +
+        `Replace your current data with it?`;
+      document.getElementById("importConfirm").classList.add("show");
+    } catch (err) {
+      showMsg("dataMsg", "That file couldn't be read as JSON. Please choose a progress file downloaded from hugetree.", "error");
+    }
+  };
+  reader.onerror = () => {
+    showMsg("dataMsg", "The file couldn't be read. Please try again.", "error");
+  };
+  reader.readAsText(file);
+
+  // Reset the input so picking the same file again still triggers "change"
+  e.target.value = "";
+});
+
+// Check that an uploaded object really looks like one of our progress files
+function validateImport(data) {
+  const fail = (message) => ({ ok: false, message });
+
+  if (!data || typeof data !== "object") {
+    return fail("That file doesn't look like a hugetree progress file.");
+  }
+  const knownNames = ["hugetree", "Evolution Tree Gym Tracker"];
+  if (!knownNames.includes(data.appName)) {
+    return fail("That file doesn't look like a hugetree progress file.");
+  }
+  if (!Array.isArray(data.workouts)) {
+    return fail("The file is missing its workout list, so it can't be restored.");
+  }
+
+  let importedGoal = goalMeters;
+  let importedRPE = useRPE;
+  if (data.settings && typeof data.settings === "object") {
+    const g = parseInt(data.settings.goalMeters, 10);
+    if (Number.isFinite(g) && g >= 1) importedGoal = g;
+    if (typeof data.settings.useRPE === "boolean") importedRPE = data.settings.useRPE;
+  }
+
+  // Rebuild each workout, skipping anything malformed.
+  // Reps may be missing in files from the older tree version — those
+  // workouts are kept and count as 1 rep per set in the new formula.
+  const cleaned = [];
+  for (const w of data.workouts) {
+    if (!w || typeof w !== "object") continue;
+    const sets = parseInt(w.sets, 10);
+    if (!Number.isFinite(sets) || sets < 1) continue;
+    if (typeof w.exercise !== "string" || !w.exercise.trim()) continue;
+
+    let rpe = null;
+    if (w.rpe !== null && w.rpe !== undefined && w.rpe !== "") {
+      const r = parseFloat(w.rpe);
+      if (Number.isFinite(r) && r >= 1 && r <= 10) rpe = r;
+    }
+    let reps = null;
+    if (w.reps !== null && w.reps !== undefined && w.reps !== "") {
+      const r = parseInt(w.reps, 10);
+      if (Number.isFinite(r) && r >= 0) reps = r;
+    }
+
+    cleaned.push({
+      id: (typeof w.id === "string" && w.id) ? w.id : makeId(),
+      date: (typeof w.date === "string" && w.date) ? w.date : todayISO(),
+      exercise: w.exercise.trim(),
+      sets: sets,
+      reps: reps,
+      weight: typeof w.weight === "string" ? w.weight : "",
+      rpe: rpe,
+      notes: typeof w.notes === "string" ? w.notes : "",
+      meters: 0, // recalculated below from the restored settings
+      createdAt: (typeof w.createdAt === "string") ? w.createdAt : new Date().toISOString()
+    });
+  }
+
+  return { ok: true, workouts: cleaned, goalMeters: importedGoal, useRPE: importedRPE };
+}
+
+document.getElementById("importConfirmYes").addEventListener("click", () => {
+  if (!pendingImport) return;
+
+  goalMeters = pendingImport.goalMeters;
+  useRPE = pendingImport.useRPE;
+  workouts = pendingImport.workouts;
+
+  recalcAllMeters(); // compute meters with the restored settings (also saves workouts)
+  saveGoal();
+  saveUseRPE();
+
+  document.getElementById("importConfirm").classList.remove("show");
+  renderAll();
+  showMsg("dataMsg", `Progress restored! ${workouts.length} workout(s) loaded. Welcome back to the mountain. ⛰️`, "ok");
+  pendingImport = null;
+});
+
+document.getElementById("importConfirmNo").addEventListener("click", () => {
+  pendingImport = null;
+  document.getElementById("importConfirm").classList.remove("show");
+  showMsg("dataMsg", "Upload cancelled. Your current data is untouched.", "ok");
+});
+
+/* --- Data controls: clear all --- */
+
+document.getElementById("clearBtn").addEventListener("click", () => {
+  document.getElementById("clearConfirm").classList.add("show");
+});
+
+document.getElementById("clearConfirmNo").addEventListener("click", () => {
+  document.getElementById("clearConfirm").classList.remove("show");
+});
+
+document.getElementById("clearConfirmYes").addEventListener("click", () => {
+  workouts = [];
+  goalMeters = DEFAULT_GOAL;
+  useRPE = false;
+  saveWorkouts();
+  saveGoal();
+  saveUseRPE();
+
+  document.getElementById("clearConfirm").classList.remove("show");
+  renderAll();
+  showMsg("dataMsg", "All data cleared. The mountain awaits a fresh climb. 🏔️", "ok");
+});
+
+/* ---------- 7. Word report export ----------
+   Builds a Word-compatible HTML document entirely in the browser
+   and downloads it as a .doc file. Word (and Google Docs, Pages,
+   LibreOffice) open these natively. No servers, no libraries. */
+
+document.getElementById("wordReportBtn").addEventListener("click", () => {
+  const totalMeters = workouts.reduce((s, w) => s + (w.meters || 0), 0);
+  const totalSets   = workouts.reduce((s, w) => s + (w.sets || 0), 0);
+  const totalReps   = workouts.reduce((s, w) => {
+    const r = Number(w.reps), st = Number(w.sets);
+    return s + ((Number.isFinite(r) && Number.isFinite(st)) ? r * st : 0);
+  }, 0);
+  const percent = goalMeters > 0 ? Math.floor((totalMeters / goalMeters) * 100) : 0;
+  const remaining = Math.max(0, goalMeters - totalMeters);
+
+  // Exercise-level summary (frequency + volume per exercise)
+  const byExercise = {};
+  workouts.forEach(w => {
+    const key = w.exercise;
+    if (!byExercise[key]) byExercise[key] = { count: 0, sets: 0, reps: 0, meters: 0, rpes: [] };
+    byExercise[key].count += 1;
+    byExercise[key].sets  += Number(w.sets) || 0;
+    byExercise[key].reps  += (Number(w.sets) || 0) * (Number(w.reps) || 0);
+    byExercise[key].meters += Number(w.meters) || 0;
+    if (w.rpe !== null && w.rpe !== undefined && w.rpe !== "") byExercise[key].rpes.push(Number(w.rpe));
+  });
+
+  const exerciseRows = Object.keys(byExercise).sort().map(name => {
+    const e = byExercise[name];
+    const avgRpe = e.rpes.length
+      ? (e.rpes.reduce((a, b) => a + b, 0) / e.rpes.length).toFixed(1)
+      : "—";
+    return `<tr>
+      <td>${esc(name)}</td><td>${e.count}</td><td>${e.sets}</td>
+      <td>${e.reps}</td><td>${avgRpe}</td><td>${e.meters}</td>
+    </tr>`;
+  }).join("");
+
+  // Full log, oldest first (better for spotting trends over time)
+  const sorted = [...workouts].sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    return (a.createdAt || "") < (b.createdAt || "") ? -1 : 1;
+  });
+
+  const logRows = sorted.map(w => `<tr>
+    <td>${esc(w.date)}</td>
+    <td>${esc(w.exercise)}</td>
+    <td>${w.sets}</td>
+    <td>${(w.reps === null || w.reps === undefined || w.reps === "") ? "—" : w.reps}</td>
+    <td>${w.weight ? esc(w.weight) : "—"}</td>
+    <td>${(w.rpe === null || w.rpe === undefined || w.rpe === "") ? "—" : w.rpe}</td>
+    <td>${w.meters}</td>
+    <td>${w.notes ? esc(w.notes) : ""}</td>
+  </tr>`).join("");
+
+  const formulaText = useRPE
+    ? "RPE mode ON — meters per workout = sets × reps × (RPE ÷ 10). Workouts without an RPE fall back to sets × reps."
+    : "RPE mode OFF — meters per workout = sets × reps.";
+
+  const doc = `
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:w="urn:schemas-microsoft-com:office:word"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="utf-8">
+<title>hugetree Training Report</title>
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]-->
+<style>
+  body { font-family: Calibri, Arial, sans-serif; color: #1a1a1a; }
+  h1 { font-size: 22pt; color: #1f4e79; margin-bottom: 4pt; }
+  h2 { font-size: 14pt; color: #1f4e79; margin-top: 18pt; }
+  p, li, td, th { font-size: 10.5pt; }
+  .meta { color: #666666; font-size: 9.5pt; }
+  table { border-collapse: collapse; width: 100%; margin-top: 6pt; }
+  th, td { border: 1pt solid #b8c4d6; padding: 4pt 6pt; text-align: left; vertical-align: top; }
+  th { background: #dbe5f1; font-weight: bold; }
+  .note { background: #f2f6fb; border: 1pt solid #b8c4d6; padding: 8pt; }
+</style>
+</head>
+<body>
+  <h1>hugetree Training Report</h1>
+  <p class="meta">Generated ${new Date().toLocaleString()} · hugetree mountain gym tracker · data exported directly from the app, unedited</p>
+
+  <h2>1. Purpose of this document</h2>
+  <p class="note">This report is a structured export of one person's strength-training log, prepared for AI-assisted analysis.
+  Useful analyses include: training frequency and consistency trends, volume per exercise and per week,
+  effort trends (RPE) over time, muscle-group balance inferred from exercise names, and suggestions for
+  progression or recovery. All numbers are self-reported by the athlete.</p>
+
+  <h2>2. Settings and scoring rules</h2>
+  <ul>
+    <li><b>Summit goal:</b> ${goalMeters} meters</li>
+    <li><b>Scoring formula:</b> ${formulaText}</li>
+    <li><b>RPE</b> = Rate of Perceived Exertion, self-rated from 1 (very easy) to 10 (maximum effort).</li>
+    <li><b>Meters</b> are the app's gamified progress unit, not real altitude.</li>
+  </ul>
+
+  <h2>3. Progress summary</h2>
+  <table>
+    <tr><th>Metric</th><th>Value</th></tr>
+    <tr><td>Total workouts logged</td><td>${workouts.length}</td></tr>
+    <tr><td>Total sets</td><td>${totalSets}</td></tr>
+    <tr><td>Total reps (sets × reps)</td><td>${totalReps}</td></tr>
+    <tr><td>Meters climbed</td><td>${totalMeters}</td></tr>
+    <tr><td>Summit goal</td><td>${goalMeters} m</td></tr>
+    <tr><td>Progress</td><td>${percent}% (${remaining} m remaining)</td></tr>
+  </table>
+
+  <h2>4. Per-exercise summary</h2>
+  <table>
+    <tr><th>Exercise</th><th>Sessions</th><th>Total sets</th><th>Total reps</th><th>Avg RPE</th><th>Meters</th></tr>
+    ${exerciseRows || '<tr><td colspan="6">No workouts logged yet.</td></tr>'}
+  </table>
+
+  <h2>5. Full workout log (oldest first)</h2>
+  <table>
+    <tr><th>Date</th><th>Exercise</th><th>Sets</th><th>Reps/set</th><th>Weight</th><th>RPE</th><th>Meters</th><th>Notes</th></tr>
+    ${logRows || '<tr><td colspan="8">No workouts logged yet.</td></tr>'}
+  </table>
+
+  <h2>6. Suggested prompts for AI analysis</h2>
+  <ul>
+    <li>"Analyse my training consistency and identify gaps of more than a week."</li>
+    <li>"Which exercises am I neglecting, and what muscle groups might be under-trained?"</li>
+    <li>"Is my average RPE trending up or down, and what does that suggest about fatigue or progression?"</li>
+    <li>"Based on my volume trends, suggest a plan for the next four weeks."</li>
+  </ul>
+</body>
+</html>`;
+
+  const blob = new Blob(['\ufeff', doc], { type: "application/msword" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "hugetree-report-" + todayISO() + ".doc";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+
+  showMsg("dataMsg", "Word report downloaded. Hand it to your favourite AI for analysis. 📄", "ok");
+});
+
+/* ---------- Confetti (from confetti-burst-snippet.html, expanded) ----------
+   fireConfetti(el, options) bursts colourful pieces from the center of el.
+   Themes give each button its own colour story; motions give each action
+   its own personality. 100% front-end: DOM + CSS animations only. */
+
+const CONFETTI_THEMES = {
+  glacier:  ['#67d4f5', '#9ae6ff', '#e9eefa', '#4aa8c9'],
+  summit:   ['#f3b653', '#ffd98a', '#fff3d6', '#e0962b'],
+  alpenglow:['#ef8078', '#ffb3ac', '#f3b653', '#fbf7ec'],
+  aurora:   ['#67d4f5', '#7ef5c0', '#b48cf2', '#f3b653', '#ef8aa1'],
+  snow:     ['#ffffff', '#e9eefa', '#cfe3f7', '#9ae6ff'],
+  rainbow:  ['#ef8078', '#f3b653', '#f5e663', '#7ef5a0', '#67d4f5', '#b48cf2']
+};
+
+const CONFETTI_SHAPES = ['', 'shape-circle', 'shape-strip', 'shape-square', 'shape-star'];
+
+function fireConfetti(targetEl, options) {
+  options = options || {};
+  const count   = options.count   || 22;
+  const colors  = options.colors  || CONFETTI_THEMES.aurora;
+  const spreadX = options.spreadX || 260;
+  const spreadY = options.spreadY || 160;
+  const motion  = options.motion  || 'fly';      // fly | fountain | spiral | drift | mixed
+  const shapes  = options.shapes  || CONFETTI_SHAPES;
+  const reduced = window.matchMedia &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduced || !targetEl) return;
+
+  // confetti is absolutely positioned, so the origin needs a positioning context
+  const cs = getComputedStyle(targetEl);
+  if (cs.position === 'static') targetEl.style.position = 'relative';
+
+  for (let i = 0; i < count; i++) {
+    const piece = document.createElement('i');
+    const shape = shapes[Math.floor(Math.random() * shapes.length)];
+    const m = motion === 'mixed'
+      ? ['fly', 'fountain', 'spiral', 'drift'][Math.floor(Math.random() * 4)]
+      : motion;
+    piece.className = 'confetti-piece' +
+      (shape ? ' ' + shape : '') +
+      (m !== 'fly' ? ' motion-' + m : '');
+    piece.style.left = '50%';
+    piece.style.top = '50%';
+    piece.style.background = colors[i % colors.length];
+    piece.style.setProperty('--tx', ((Math.random() - 0.5) * spreadX) + 'px');
+    piece.style.setProperty('--ty', (-40 - Math.random() * spreadY) + 'px');
+    piece.style.setProperty('--rot', ((Math.random() - 0.5) * 540) + 'deg');
+    piece.style.animationDelay = (Math.random() * 0.25) + 's';
+    targetEl.appendChild(piece);
+    setTimeout(() => piece.remove(), 2200);
+  }
+}
+
+/* Wire confetti onto the app's buttons — each gets its own vibe. */
+function wireConfetti(id, opts) {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('click', () => fireConfetti(el, opts));
+}
+
+// Adding a workout: the big celebration — golden summit burst, mixed motion
+wireConfetti('addWorkoutBtn', { count: 34, colors: CONFETTI_THEMES.summit, motion: 'mixed', spreadX: 320, spreadY: 200 });
+
+// Clearing the form: a quick glacier-blue puff
+wireConfetti('clearFormBtn', { count: 12, colors: CONFETTI_THEMES.glacier, motion: 'fly', spreadX: 160, spreadY: 100 });
+
+// Goal chips + custom/reset: cyan spirals swirling like mountain wind
+document.querySelectorAll('.goal-chip').forEach(chip => {
+  chip.addEventListener('click', () => fireConfetti(chip, {
+    count: 16, colors: CONFETTI_THEMES.glacier, motion: 'spiral', spreadX: 200, spreadY: 120
+  }));
+});
+wireConfetti('setCustomGoal', { count: 18, colors: CONFETTI_THEMES.aurora, motion: 'spiral' });
+wireConfetti('resetGoal',     { count: 14, colors: CONFETTI_THEMES.glacier, motion: 'drift', spreadY: 120 });
+
+// Data controls
+wireConfetti('downloadBtn',   { count: 24, colors: CONFETTI_THEMES.aurora,  motion: 'fountain', spreadX: 280 });
+wireConfetti('uploadBtn',     { count: 16, colors: CONFETTI_THEMES.glacier, motion: 'fountain' });
+wireConfetti('wordReportBtn', { count: 28, colors: CONFETTI_THEMES.summit,  motion: 'mixed', spreadX: 320 });
+
+// Restoring a backup successfully deserves a rainbow
+wireConfetti('importConfirmYes', { count: 30, colors: CONFETTI_THEMES.rainbow, motion: 'mixed', spreadX: 300 });
+
+// Clearing everything: a gentle snowfall drifting down — a fresh start
+wireConfetti('clearConfirmYes', { count: 26, colors: CONFETTI_THEMES.snow, motion: 'drift', shapes: ['shape-circle'], spreadX: 240, spreadY: 40 });
+
+// RPE toggle: little alpenglow sparkle on its label
+(() => {
+  const t = document.getElementById('rpeToggle');
+  if (t) t.addEventListener('change', () => {
+    fireConfetti(t.closest('label') || t.parentElement, {
+      count: 12, colors: CONFETTI_THEMES.alpenglow, motion: 'fly', spreadX: 140, spreadY: 90
+    });
+  });
+})();
+
+/* Summit reached: one giant rainbow mega-burst over the whole mountain.
+   Fires once each time the flag goes from unplanted → planted. */
+let summitCelebrated = false;
+const flagEl = document.getElementById('summitFlag');
+const summitObserver = new MutationObserver(() => {
+  const planted = flagEl.classList.contains('planted');
+  if (planted && !summitCelebrated) {
+    summitCelebrated = true;
+    const scene = document.querySelector('.mountain-scene');
+    fireConfetti(scene, { count: 70, colors: CONFETTI_THEMES.rainbow, motion: 'mixed', spreadX: 420, spreadY: 320 });
+    setTimeout(() => fireConfetti(scene, { count: 40, colors: CONFETTI_THEMES.summit, motion: 'fountain', spreadX: 360, spreadY: 260 }), 500);
+  } else if (!planted) {
+    summitCelebrated = false;
+  }
+});
+if (flagEl) summitObserver.observe(flagEl, { attributes: true, attributeFilter: ['class'] });
+
+/* ---------- Start the app ---------- */
+
+// Today's date as "YYYY-MM-DD" in local time (for the date input & filenames)
+function todayISO() {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return d.getFullYear() + "-" + m + "-" + day;
+}
+
+loadState();
+recalcAllMeters(); // apply the current formula to any previously saved workouts
+document.getElementById("wDate").value = todayISO();
+renderAll();
+</script>
+
+</body>
+</html>
